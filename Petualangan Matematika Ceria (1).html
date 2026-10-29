@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Petualangan Matematika Ceria</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Fredoka for playful kids theme -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background: linear-gradient(135deg, #fbcfe8 0%, #bae6fd 50%, #fed7aa 100%);
+            min-height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .bouncy {
+            animation: bounce 2s infinite ease-in-out;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .pulse-btn {
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+        .pulse-btn:active {
+            transform: scale(0.95);
+        }
+        /* Custom scrollbar for safe mobile view */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-2 sm:p-4">
+
+    <!-- Container Utama Game (Mobile First Portrait Optimized) -->
+    <div id="game-container" class="w-full max-w-md bg-white/90 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[850px] border-4 border-white relative">
+        
+        <!-- Top Bar (Header) -->
+        <header id="top-bar" class="bg-gradient-to-r from-amber-400 to-orange-400 p-3 text-white flex justify-between items-center shadow-md z-10 hidden">
+            <button onclick="goHomeConfirm()" class="bg-white/30 hover:bg-white/40 px-3 py-1.5 rounded-2xl text-sm font-bold flex items-center gap-1 transition">
+                🏠 Menu
+            </button>
+            <div id="level-indicator" class="font-bold text-lg bg-white/20 px-4 py-1 rounded-full shadow-inner">
+                Level 1 / 20
+            </div>
+            <button id="sound-toggle-btn" onclick="toggleSound()" class="bg-white/30 hover:bg-white/40 p-2 rounded-2xl text-sm font-bold transition">
+                🔊
+            </button>
+        </header>
+
+        <!-- Dynamic Game Content Area -->
+        <main id="main-content" class="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-between relative">
+            <!-- Content will be injected dynamically by JavaScript -->
+        </main>
+    </div>
+
+    <!-- JavaScript Game Engine & Logic -->
+    <script>
+        // --- Web Audio API Sound Synthesizer (No external asset dependency) ---
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            try {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'click') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.08);
+                    gainNode.gain.setValueAtTime(0.15, now);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'correct') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                    gainNode.gain.setValueAtTime(0.2, now);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                } else if (type === 'wrong') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(200, now);
+                    osc.frequency.exponentialRampToValueAtTime(130, now + 0.2);
+                    gainNode.gain.setValueAtTime(0.15, now);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'win') {
+                    const notes = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77, 1046.50];
+                    notes.forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.frequency.setValueAtTime(freq, now + i * 0.08);
+                        g.gain.setValueAtTime(0.15, now + i * 0.08);
+                        g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.15);
+                        o.start(now + i * 0.08);
+                        o.stop(now + i * 0.08 + 0.15);
+                    });
+                }
+            } catch (e) {
+                console.error("Audio error:", e);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('sound-toggle-btn');
+            if (btn) btn.innerText = soundEnabled ? '🔊' : '🔇';
+            playSound('click');
+        }
+
+        // --- Game State & Variables ---
+        let gameState = {
+            currentLevel: 1,
+            score: 0,
+            stars: 0,
+            rikoMessage: "Halo! Aku Riko! Ayo kita belajar matematika sambil bermain! 🐰✨",
+            rikoExpression: "happy", // happy, thinking, excited, supportive
+            questionData: null
+        };
+
+        const EMOJIS = ['🍎', '⭐', '🐟', '🍓', '🎈'];
+        const EMOJI_NAMES = { '🍎': 'apel', '⭐': 'bintang', '🐟': 'ikan', '🍓': 'stroberi', '🎈': 'balon' };
+
+        // --- LocalStorage Persistence ---
+        function saveProgress() {
+            try {
+                localStorage.setItem('petualangan_matematika_save', JSON.stringify({
+                    level: gameState.currentLevel,
+                    score: gameState.score,
+                    stars: gameState.stars
+                }));
+            } catch (e) {
+                console.error("Could not save progress", e);
+            }
+        }
+
+        function loadProgress() {
+            try {
+                const data = localStorage.getItem('petualangan_matematika_save');
+                return data ? JSON.parse(data) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function clearProgress() {
+            try {
+                localStorage.removeItem('petualangan_matematika_save');
+            } catch (e) {}
+        }
+
+        // --- Confetti Effect Generator ---
+        function triggerConfetti() {
+            const container = document.getElementById('main-content');
+            if (!container) return;
+            const colors = ['#f43f5e', '#ec4899', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
+            for (let i = 0; i < 35; i++) {
+                const el = document.createElement('div');
+                el.className = 'absolute rounded-full pointer-events-none animate-ping';
+                const size = Math.floor(Math.random() * 10) + 6;
+                el.style.width = size + 'px';
+                el.style.height = size + 'px';
+                el.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                el.style.left = Math.random() * 90 + 5 + '%';
+                el.style.top = Math.random() * 50 + 20 + '%';
+                el.style.transition = 'all 1s ease-out';
+                container.appendChild(el);
+                setTimeout(() => {
+                    el.style.transform = `translate(${(Math.random() - 0.5) * 200}px, ${Math.random() * 150 + 50}px) rotate(${Math.random() * 360}deg)`;
+                    el.style.opacity = '0';
+                }, 50);
+                setTimeout(() => el.remove(), 1100);
+            }
+        }
+
+        // --- Render Riko Character Widget ---
+        function getRikoHTML(expression, message) {
+            let faceEmoji = '🐰💖';
+            if (expression === 'happy') faceEmoji = '🐰✨';
+            if (expression === 'excited') faceEmoji = '🥳🐰';
+            if (expression === 'supportive') faceEmoji = '🤗🐰';
+
+            return `
+                <div class="flex items-center gap-3 bg-gradient-to-r from-pink-100 to-purple-100 p-3 rounded-2xl border-2 border-pink-200 shadow-sm w-full mb-3">
+                    <div class="text-4xl bouncy bg-white p-2 rounded-2xl shadow-inner shrink-0">
+                        ${faceEmoji}
+                    </div>
+                    <div class="flex-1">
+                        <div class="text-xs font-bold text-pink-600 uppercase tracking-wide">Riko Berkata:</div>
+                        <div class="text-sm sm:text-base font-semibold text-slate-700">${message}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Views & Screens ---
+
+        // 1. Halaman Utama (Home)
+        function renderHome() {
+            document.getElementById('top-bar').classList.add('hidden');
+            const saved = loadProgress();
+            const main = document.getElementById('main-content');
+            
+            main.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center my-auto w-full py-4">
+                    <div class="text-6xl mb-3 bouncy">🐰🎈</div>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-pink-600 mb-1 leading-tight">
+                        Petualangan Matematika Ceria
+                    </h1>
+                    <p class="text-slate-500 text-sm mb-6 font-medium">Bermain sambil belajar untuk usia 5–8 tahun</p>
+                    
+                    ${getRikoHTML('happy', 'Halo! Pilih menu di bawah untuk mulai berpetualang seru bersama Riko!')}
+
+                    <div class="flex flex-col gap-3 w-full max-w-xs mt-2">
+                        ${saved ? `
+                            <button onclick="resumeGame()" class="pulse-btn bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:opacity-95 text-base flex items-center justify-center gap-2">
+                                ▶️ Lanjutkan Bermain (Lv ${saved.level})
+                            </button>
+                            <button onclick="startNewGameConfirm()" class="pulse-btn bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg hover:opacity-95 text-base flex items-center justify-center gap-2">
+                                🔄 Mulai Dari Awal
+                            </button>
+                        ` : `
+                            <button onclick="startNewGame()" class="pulse-btn bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:opacity-95 text-lg flex items-center justify-center gap-2">
+                                MULAI BERMAIN ▶️
+                            </button>
+                        `}
+                        <button onclick="renderHowToPlay()" class="pulse-btn bg-gradient-to-r from-sky-400 to-blue-500 text-white font-bold py-3 px-6 rounded-2xl shadow-md hover:opacity-95 text-sm flex items-center justify-center gap-2">
+                            ❓ CARA BERMAIN
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 2. Cara Bermain (How to Play)
+        function renderHowToPlay() {
+            playSound('click');
+            const main = document.getElementById('main-content');
+            main.innerHTML = `
+                <div class="flex flex-col items-center w-full my-auto py-2">
+                    <h2 class="text-xl font-bold text-pink-600 mb-3">❓ Cara Bermain</h2>
+                    <div class="bg-pink-50 border-2 border-pink-200 rounded-2xl p-4 text-slate-700 text-sm space-y-3 w-full shadow-inner mb-4 text-left">
+                        <div class="flex items-start gap-2">
+                            <span class="text-lg">🔢</span>
+                            <p>Selesaikan <strong>20 level</strong> seru mulai dari mengenal angka, menghitung benda, hingga penjumlahan & pengurangan!</p>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-lg">⭐</span>
+                            <p>Setiap jawaban benar kamu akan mendapat <strong>+1 bintang</strong> dan semangat dari Riko!</p>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <span class="text-lg">💪</span>
+                            <p>Jangan takut salah, Riko selalu siap membantu dan menemani kamu belajar dengan gembira.</p>
+                        </div>
+                    </div>
+                    <button onclick="renderHome()" class="pulse-btn bg-slate-500 text-white font-bold py-3 px-8 rounded-2xl shadow-md hover:bg-slate-600 text-sm">
+                        ⬅️ KEMBALI KE MENU
+                    </button>
+                </div>
+            `;
+        }
+
+        // Confirm modal before resetting progress
+        function startNewGameConfirm() {
+            playSound('click');
+            const main = document.getElementById('main-content');
+            main.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center my-auto w-full p-4">
+                    <div class="text-5xl mb-3">⚠️</div>
+                    <h3 class="text-lg font-bold text-slate-700 mb-2">Mulai Dari Awal?</h3>
+                    <p class="text-sm text-slate-500 mb-6">Progress permainan sebelumnya akan direset.</p>
+                    <div class="flex gap-3 w-full max-w-xs">
+                        <button onclick="startNewGame()" class="flex-1 bg-rose-500 text-white font-bold py-3 rounded-2xl shadow-md">Ya, Mulai</button>
+                        <button onclick="renderHome()" class="flex-1 bg-slate-300 text-slate-700 font-bold py-3 rounded-2xl shadow-md">Batal</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function goHomeConfirm() {
+            playSound('click');
+            const main = document.getElementById('main-content');
+            main.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center my-auto w-full p-4">
+                    <div class="text-5xl mb-3">🏠</div>
+                    <h3 class="text-lg font-bold text-slate-700 mb-2">Kembali ke Menu Utama?</h3>
+                    <p class="text-sm text-slate-500 mb-6">Progress level kamu saat ini tersimpan otomatis.</p>
+                    <div class="flex gap-3 w-full max-w-xs">
+                        <button onclick="renderHome()" class="flex-1 bg-amber-500 text-white font-bold py-3 rounded-2xl shadow-md">Ya</button>
+                        <button onclick="loadLevel(${gameState.currentLevel})" class="flex-1 bg-slate-300 text-slate-700 font-bold py-3 rounded-2xl shadow-md">Lanjutkan</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function startNewGame() {
+            playSound('click');
+            clearProgress();
+            gameState.currentLevel = 1;
+            gameState.score = 0;
+            gameState.stars = 0;
+            gameState.rikoMessage = "Petualangan dimulai! Semangat ya! 🌟";
+            gameState.rikoExpression = "happy";
+            saveProgress();
+            loadLevel(1);
+        }
+
+        function resumeGame() {
+            playSound('click');
+            const saved = loadProgress();
+            if (saved) {
+                gameState.currentLevel = saved.level > 20 ? 20 : saved.level;
+                gameState.score = saved.score;
+                gameState.stars = saved.stars;
+            }
+            loadLevel(gameState.currentLevel);
+        }
+
+        // --- Question Generator Engine per Level Category ---
+        function generateQuestion(level) {
+            let q = { instruction: '', display: '', options: [], correctAnswer: null, type: '' };
+
+            if (level >= 1 && level <= 5) {
+                // Level 1-5: Mengenal Angka (1-10)
+                const targetNum = Math.floor(Math.random() * 10) + 1;
+                q.instruction = `Pilih angka ${targetNum}`;
+                q.display = `<div class="text-5xl font-extrabold text-pink-600 my-2">${targetNum}</div>`;
+                q.correctAnswer = targetNum;
+                q.type = 'number';
+
+                let opts = [targetNum];
+                while (opts.length < 3) {
+                    const rnd = Math.floor(Math.random() * 10) + 1;
+                    if (!opts.includes(rnd)) opts.push(rnd);
+                }
+                q.options = opts.sort(() => Math.random() - 0.5);
+
+            } else if (level >= 6 && level <= 10) {
+                // Level 6-10: Menghitung Benda Lucu (1-20)
+                const count = Math.floor(Math.random() * 15) + 3; // 3 to 17
+                const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+                const itemName = EMOJI_NAMES[emoji];
+                q.instruction = `Berapa jumlah ${itemName}?`;
+                
+                let iconsHTML = '';
+                for (let i = 0; i < count; i++) {
+                    iconsHTML += `<span class="text-3xl m-0.5 inline-block bouncy" style="animation-delay: ${i * 0.05}s">${emoji}</span>`;
+                }
+                q.display = `<div class="flex flex-wrap justify-center max-w-xs bg-amber-50 p-3 rounded-2xl border-2 border-amber-200 shadow-inner my-2">${iconsHTML}</div>`;
+                q.correctAnswer = count;
+                q.type = 'number';
+
+                let opts = [count];
+                while (opts.length < 3) {
+                    let diff = (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 3) + 1);
+                    let rnd = count + diff;
+                    if (rnd >= 1 && rnd <= 20 && !opts.includes(rnd)) opts.push(rnd);
+                }
+                while (opts.length < 3) {
+                    let rnd = Math.floor(Math.random() * 20) + 1;
+                    if (!opts.includes(rnd)) opts.push(rnd);
+                }
+                q.options = opts.sort(() => Math.random() - 0.5);
+
+            } else if (level >= 11 && level <= 14) {
+                // Level 11-14: Penjumlahan Sederhana (max sum 10)
+                const a = Math.floor(Math.random() * 5) + 1;
+                const b = Math.floor(Math.random() * (9 - a)) + 1;
+                const sum = a + b;
+                const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+
+                let groupA = '';
+                for(let i=0; i<a; i++) groupA += emoji;
+                let groupB = '';
+                for(let i=0; i<b; i++) groupB += emoji;
+
+                q.instruction = `Berapa hasil penjumlahannya?`;
+                q.display = `
+                    <div class="flex items-center justify-center gap-2 my-3 text-2xl bg-sky-50 p-3 rounded-2xl border-2 border-sky-200 shadow-inner">
+                        <span>${groupA}</span>
+                        <span class="font-bold text-pink-500">+</span>
+                        <span>${groupB}</span>
+                        <span class="font-bold text-pink-500">=</span>
+                        <span class="font-bold text-slate-700">?</span>
+                    </div>
+                `;
+                q.correctAnswer = sum;
+                q.type = 'number';
+
+                let opts = [sum];
+                while (opts.length < 3) {
+                    let diff = (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 2) + 1);
+                    let rnd = sum + diff;
+                    if (rnd >= 1 && rnd <= 10 && !opts.includes(rnd)) opts.push(rnd);
+                }
+                while (opts.length < 3) {
+                    let rnd = Math.floor(Math.random() * 10) + 1;
+                    if (!opts.includes(rnd)) opts.push(rnd);
+                }
+                q.options = opts.sort(() => Math.random() - 0.5);
+
+            } else if (level >= 15 && level <= 17) {
+                // Level 15-17: Pengurangan Sederhana
+                const total = Math.floor(Math.random() * 6) + 4; // 4 to 9
+                const sub = Math.floor(Math.random() * (total - 1)) + 1;
+                const rem = total - sub;
+                const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+                const itemName = EMOJI_NAMES[emoji];
+
+                let iconsHTML = '';
+                for(let i=0; i<total; i++) {
+                    let opacity = i >= (total - sub) ? 'opacity-30 line-through' : '';
+                    iconsHTML += `<span class="text-2xl inline-block ${opacity}">${emoji}</span>`;
+                }
+
+                q.instruction = `Ada ${total} ${itemName}. ${sub} dimakan. Berapa yang tersisa?`;
+                q.display = `
+                    <div class="flex flex-col items-center my-2 bg-rose-50 p-3 rounded-2xl border-2 border-rose-200 shadow-inner w-full">
+                        <div class="flex flex-wrap justify-center gap-1 mb-1">${iconsHTML}</div>
+                        <div class="text-sm font-semibold text-rose-600">${total} - ${sub} = ?</div>
+                    </div>
+                `;
+                q.correctAnswer = rem;
+                q.type = 'number';
+
+                let opts = [rem];
+                while (opts.length < 3) {
+                    let diff = (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 2) + 1);
+                    let rnd = rem + diff;
+                    if (rnd >= 0 && rnd <= 10 && !opts.includes(rnd)) opts.push(rnd);
+                }
+                while (opts.length < 3) {
+                    let rnd = Math.floor(Math.random() * 8);
+                    if (!opts.includes(rnd)) opts.push(rnd);
+                }
+                q.options = opts.sort(() => Math.random() - 0.5);
+
+            } else if (level === 18) {
+                // Level 18: Perbandingan (<, >, =)
+                const num1 = Math.floor(Math.random() * 8) + 2;
+                let num2 = Math.floor(Math.random() * 8) + 2;
+                const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+
+                let stars1 = '', stars2 = '';
+                for(let i=0; i<num1; i++) stars1 += emoji;
+                for(let i=0; i<num2; i++) stars2 += emoji;
+
+                let correctSign = num1 > num2 ? '>' : (num1 < num2 ? '<' : '=');
+
+                q.instruction = "Mana perbandingan yang benar?";
+                q.display = `
+                    <div class="flex flex-col gap-2 my-2 bg-purple-50 p-3 rounded-2xl border-2 border-purple-200 shadow-inner w-full text-center">
+                        <div class="text-sm">A: ${num1} (${stars1})</div>
+                        <div class="text-sm">B: ${num2} (${stars2})</div>
+                        <div class="text-xs font-bold text-purple-600">Bandingkan A dengan B</div>
+                    </div>
+                `;
+                q.correctAnswer = correctSign;
+                q.type = 'sign';
+                q.options = ['>', '<', '='].sort(() => Math.random() - 0.5);
+
+            } else if (level === 19) {
+                // Level 19: Urutan Angka (kecil ke besar)
+                let arr = [];
+                while(arr.length < 4) {
+                    let r = Math.floor(Math.random() * 15) + 1;
+                    if(!arr.includes(r)) arr.push(r);
+                }
+                let sortedStr = [...arr].sort((a,b) => a - b).join(' → ');
+                q.instruction = "Susun angka dari kecil ke besar:";
+                q.display = `<div class="text-xl font-extrabold text-blue-600 my-3 bg-blue-50 p-3 rounded-2xl border-2 border-blue-200 shadow-inner">${arr.join(' — ')}</div>`;
+                q.correctAnswer = sortedStr;
+                q.type = 'string';
+
+                let opts = [sortedStr];
+                while(opts.length < 3) {
+                    let shuffled = [...arr].sort(() => Math.random() - 0.5).join(' → ');
+                    let reversed = [...arr].sort((a,b) => b - a).join(' → ');
+                    let candidate = Math.random() > 0.5 ? shuffled : reversed;
+                    if(!opts.includes(candidate)) opts.push(candidate);
+                }
+                q.options = opts.sort(() => Math.random() - 0.5);
+
+            } else {
+                // Level 20: Tantangan Akhir (Random mixed sub-types)
+                const subType = Math.floor(Math.random() * 3);
+                if (subType === 0) {
+                    // Penjumlahan
+                    const a = Math.floor(Math.random() * 6) + 1;
+                    const b = Math.floor(Math.random() * 5) + 1;
+                    const sum = a + b;
+                    q.instruction = `Tantangan Akhir: Berapa ${a} + ${b}?`;
+                    q.display = `<div class="text-3xl font-extrabold text-amber-600 my-3">${a} + ${b} = ?</div>`;
+                    q.correctAnswer = sum;
+                    q.type = 'number';
+                    let opts = [sum];
+                    while (opts.length < 3) {
+                        let rnd = sum + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 2) + 1);
+                        if(rnd >= 1 && rnd <= 12 && !opts.includes(rnd)) opts.push(rnd);
+                        else { let x = Math.floor(Math.random()*10)+1; if(!opts.includes(x)) opts.push(x); }
+                    }
+                    q.options = opts.sort(() => Math.random() - 0.5);
+                } else if (subType === 1) {
+                    // Pengurangan
+                    const a = Math.floor(Math.random() * 6) + 4;
+                    const b = Math.floor(Math.random() * 3) + 1;
+                    const rem = a - b;
+                    q.instruction = `Tantangan Akhir: Berapa ${a} - ${b}?`;
+                    q.display = `<div class="text-3xl font-extrabold text-rose-600 my-3">${a} - ${b} = ?</div>`;
+                    q.correctAnswer = rem;
+                    q.type = 'number';
+                    let opts = [rem];
+                    while (opts.length < 3) {
+                        let rnd = rem + (Math.random() > 0.5 ? 1 : -1) * (Math.floor(Math.random() * 2) + 1);
+                        if(rnd >= 0 && rnd <= 10 && !opts.includes(rnd)) opts.push(rnd);
+                        else { let x = Math.floor(Math.random()*8); if(!opts.includes(x)) opts.push(x); }
+                    }
+                    q.options = opts.sort(() => Math.random() - 0.5);
+                } else {
+                    // Menghitung Benda
+                    const count = Math.floor(Math.random() * 8) + 4;
+                    const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+                    q.instruction = `Tantangan Akhir: Berapa jumlah ${EMOJI_NAMES[emoji]}?`;
+                    let iconsHTML = '';
+                    for (let i = 0; i < count; i++) iconsHTML += `<span class="text-2xl">${emoji}</span>`;
+                    q.display = `<div class="flex flex-wrap justify-center gap-1 my-3 bg-amber-50 p-3 rounded-2xl border-2 border-amber-200">${iconsHTML}</div>`;
+                    q.correctAnswer = count;
+                    q.type = 'number';
+                    let opts = [count];
+                    while (opts.length < 3) {
+                        let rnd = count + (Math.random() > 0.5 ? 1 : -1);
+                        if(rnd >= 1 && rnd <= 15 && !opts.includes(rnd)) opts.push(rnd);
+                        else { let x = Math.floor(Math.random()*12)+1; if(!opts.includes(x)) opts.push(x); }
+                    }
+                    q.options = opts.sort(() => Math.random() - 0.5);
+                }
+            }
+
+            return q;
+        }
+
+        // --- Load & Render Level Screen ---
+        function loadLevel(levelNum) {
+            gameState.currentLevel = levelNum;
+            gameState.questionData = generateQuestion(levelNum);
+            
+            document.getElementById('top-bar').classList.remove('hidden');
+            document.getElementById('level-indicator').innerText = `Level ${levelNum} / 20`;
+            
+            renderGamePlayScreen();
+            saveProgress();
+        }
+
+        function renderGamePlayScreen() {
+            const q = gameState.questionData;
+            const main = document.getElementById('main-content');
+
+            main.innerHTML = `
+                <div class="flex flex-col items-center justify-between w-full h-full py-1">
+                    ${getRikoHTML(gameState.rikoExpression, gameState.rikoMessage)}
+
+                    <div class="w-full text-center my-auto flex flex-col items-center">
+                        <div class="text-base sm:text-lg font-bold text-slate-700 mb-2 px-2">
+                            ${q.instruction}
+                        </div>
+                        ${q.display}
+
+                        <!-- Answer Options Grid -->
+                        <div class="grid grid-cols-3 gap-3 w-full max-w-xs mt-4">
+                            ${q.options.map(opt => `
+                                <button onclick="checkAnswer('${opt}')" class="pulse-btn bg-white hover:bg-pink-50 border-3 border-pink-300 text-slate-800 text-xl font-bold py-4 rounded-2xl shadow-md transition transform hover:-translate-y-0.5">
+                                    ${opt}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="text-xs font-bold text-slate-400 mt-2">
+                        ⭐ Total Bintang: ${gameState.stars}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Check Answer Logic & Feedback ---
+        function checkAnswer(selectedVal) {
+            const q = gameState.questionData;
+            let isCorrect = false;
+
+            if (q.type === 'number') {
+                isCorrect = Number(selectedVal) === Number(q.correctAnswer);
+            } else {
+                isCorrect = String(selectedVal) === String(q.correctAnswer);
+            }
+
+            if (isCorrect) {
+                playSound('correct');
+                gameState.score += 1;
+                gameState.stars += 1;
+                gameState.rikoExpression = 'excited';
+                
+                const praiseList = [
+                    "Hebat! ✨", "Benar! 🎉", "Kamu pintar! ⭐", "Luar biasa! 🏆", "Hebat sekali! 🌟"
+                ];
+                gameState.rikoMessage = praiseList[Math.floor(Math.random() * praiseList.length)];
+                
+                triggerConfetti();
+                renderFeedbackScreen(true);
+            } else {
+                playSound('wrong');
+                gameState.rikoExpression = 'supportive';
+                const encouragements = [
+                    "Coba lagi ya! 😊", "Hampir benar! 💪", "Tetap semangat! 👍", "Ayo coba sekali lagi! ✨"
+                ];
+                gameState.rikoMessage = encouragements[Math.floor(Math.random() * encouragements.length)];
+                renderFeedbackScreen(false);
+            }
+        }
+
+        function renderFeedbackScreen(isCorrect) {
+            const main = document.getElementById('main-content');
+            
+            main.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center my-auto w-full py-4">
+                    <div class="text-6xl mb-3 bouncy">
+                        ${isCorrect ? '🎉' : '🤗'}
+                    </div>
+                    <h2 class="text-2xl font-extrabold ${isCorrect ? 'text-emerald-600' : 'text-amber-600'} mb-2">
+                        ${isCorrect ? 'BENAR! ⭐' : 'HAMPIR BENAR!'}
+                    </h2>
+                    
+                    ${getRikoHTML(gameState.rikoExpression, gameState.rikoMessage)}
+
+                    <div class="w-full max-w-xs mt-6">
+                        <button onclick="nextStep(${isCorrect})" class="pulse-btn w-full bg-gradient-to-r ${isCorrect ? 'from-emerald-500 to-teal-500' : 'from-amber-500 to-orange-500'} text-white font-bold py-4 rounded-2xl shadow-lg text-base flex items-center justify-center gap-2">
+                            ${isCorrect && gameState.currentLevel >= 20 ? 'LIHAT HASIL AKHIR 🏆' : 'LANJUTKAN ▶️'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function nextStep(isCorrect) {
+            playSound('click');
+            if (isCorrect) {
+                if (gameState.currentLevel >= 20) {
+                    renderFinalResult();
+                } else {
+                    gameState.currentLevel += 1;
+                    gameState.rikoExpression = 'happy';
+                    gameState.rikoMessage = "Semangat di level berikutnya! 🚀";
+                    loadLevel(gameState.currentLevel);
+                }
+            } else {
+                // Let retry the same question or generate new question for practice
+                renderGamePlayScreen();
+            }
+        }
+
+        // --- Final Result Screen ---
+        function renderFinalResult() {
+            playSound('win');
+            clearProgress();
+            document.getElementById('top-bar').classList.add('hidden');
+            const main = document.getElementById('main-content');
+
+            let badge = '🥉 Badge Perunggu';
+            let msg = 'Tidak apa-apa! Coba lagi dan kamu pasti bisa! 😊';
+            
+            if (gameState.score >= 18) {
+                badge = '🥇 Badge Emas Juara Master';
+                msg = 'Wow! Kamu jago matematika! 🥳';
+            } else if (gameState.score >= 12) {
+                badge = '🥈 Badge Perak Pintar';
+                msg = 'Hebat! Terus berlatih ya! 💪';
+            }
+
+            triggerConfetti();
+
+            main.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center my-auto w-full py-4">
+                    <div class="text-6xl mb-2 bouncy">🏆🎉</div>
+                    <h2 class="text-2xl font-extrabold text-pink-600 mb-1">🎉 HEBAT!</h2>
+                    <p class="text-sm font-semibold text-slate-600 mb-4">Kamu sudah menyelesaikan Petualangan Matematika Ceria!</p>
+
+                    <div class="bg-gradient-to-r from-pink-50 to-amber-50 p-4 rounded-2xl border-2 border-pink-200 shadow-inner w-full max-w-xs mb-4 space-y-2">
+                        <div class="text-base font-bold text-slate-700">⭐ Total Bintang: ${gameState.stars}</div>
+                        <div class="text-base font-bold text-amber-600">🏆 ${badge}</div>
+                        <div class="text-sm font-bold text-slate-600">📊 Skor Akhir: ${gameState.score} / 20</div>
+                    </div>
+
+                    ${getRikoHTML('excited', msg)}
+
+                    <div class="w-full max-w-xs mt-4">
+                        <button onclick="startNewGame()" class="pulse-btn w-full bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold py-4 rounded-2xl shadow-lg text-base flex items-center justify-center gap-2">
+                            MAIN LAGI 🔄
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Initial Load ---
+        window.onload = function() {
+            renderHome();
+        };
+    </script>
+</body>
+</html>
